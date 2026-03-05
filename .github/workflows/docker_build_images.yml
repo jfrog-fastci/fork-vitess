@@ -4,20 +4,22 @@ on:
     branches:
       - main
     tags:
-      - 'v[2-9][0-9]*.*' # run only on tags greater or equal to v20.0.0 where this new way of building docker image was changed
+      - 'v[2-9][0-9]*.*'
   workflow_dispatch:
 
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Build Docker Images')
   cancel-in-progress: true
 
-permissions: read-all
+permissions:
+  contents: read
+  issues: write
 
 jobs:
   build_and_push_vttestserver:
     name: Build and push vttestserver
-    runs-on: oracle-vm-16cpu-64gb-x86-64
-    if: github.repository == 'vitessio/vitess'
+    runs-on: ubuntu-24.04
+    if: true
 
     strategy:
       fail-fast: true
@@ -25,6 +27,9 @@ jobs:
         branch: [ mysql80, mysql84 ]
 
     steps:
+      - name: FastCI
+        uses: jfrog-fastci/fastci@v0
+
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@a90bcbc6539c36a85cdfeb73f7e2f433735f215b # v2.15.0
         with:
@@ -37,6 +42,7 @@ jobs:
 
       - name: Login to Docker Hub
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        continue-on-error: true
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -51,7 +57,7 @@ jobs:
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
-          push: true
+          push: false
           tags: vitess/vttestserver:${{ matrix.branch }}
 
       ######
@@ -72,13 +78,13 @@ jobs:
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
-          push: true
+          push: false
           tags: ${{ env.DOCKER_TAG }}
 
   build_and_push_lite:
     name: Build and push lite
     runs-on: ubuntu-24.04
-    if: github.repository == 'vitessio/vitess'
+    if: true
 
     strategy:
       fail-fast: true
@@ -86,6 +92,9 @@ jobs:
         branch: [ latest, mysql80, mysql84, percona80, percona84 ]
 
     steps:
+      - name: FastCI
+        uses: jfrog-fastci/fastci@v0
+
       - name: Check out code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -93,6 +102,7 @@ jobs:
 
       - name: Login to Docker Hub
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        continue-on-error: true
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -111,7 +121,7 @@ jobs:
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
-          push: true
+          push: false
           tags: vitess/lite:${{ matrix.branch }}
 
       ######
@@ -136,13 +146,13 @@ jobs:
         with:
           context: .
           file: ${{ env.DOCKERFILE }}
-          push: true
+          push: false
           tags: ${{ env.DOCKER_TAG }}
 
   build_and_push_components:
     name: Build and push
-    runs-on: oracle-vm-16cpu-64gb-x86-64
-    if: github.repository == 'vitessio/vitess' && needs.build_and_push_lite.result == 'success'
+    runs-on: ubuntu-24.04
+    if: needs.build_and_push_lite.result == 'success'
     needs:
       - build_and_push_lite
 
@@ -153,6 +163,9 @@ jobs:
         component: [ vtadmin, vtorc, vtgate, vttablet, mysqlctld, mysqlctl, vtctl, vtctlclient, vtctld, vtctldclient, logrotate, logtail, vtbackup, vtexplain ]
 
     steps:
+      - name: FastCI
+        uses: jfrog-fastci/fastci@v0
+
       - name: Check out code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -160,6 +173,7 @@ jobs:
 
       - name: Login to Docker Hub
         uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        continue-on-error: true
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -173,7 +187,7 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: true
+          push: false
           tags: vitess/${{ matrix.component }}:latest
           build-args: |
             VT_BASE_VER=latest
@@ -184,7 +198,7 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: true
+          push: false
           tags: vitess/${{ matrix.component }}:latest-${{ matrix.debian }}
           build-args: |
             VT_BASE_VER=latest
@@ -216,7 +230,7 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: true
+          push: false
           tags: ${{ env.DOCKER_TAG }}
           build-args: |
             VT_BASE_VER=${{ env.TAG_NAME }}
@@ -229,7 +243,7 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ${{ env.DOCKER_CTX }}
-          push: true
+          push: false
           tags: ${{ env.DOCKER_TAG_DEFAULT_DEBIAN }}
           build-args: |
             VT_BASE_VER=${{ env.TAG_NAME }}
